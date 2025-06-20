@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Image Uploader with Processing</title>
+  <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1569.0.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f4f7fa;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px;
+    }
+
+    h2 {
+      color: #2c3e50;
+      margin-bottom: 20px;
+    }
+
+    .upload-container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      padding: 30px;
+      max-width: 600px;
+      width: 100%;
+      text-align: center;
+    }
+
+    input[type="file"] {
+      margin: 20px 0;
+    }
+
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    .status {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+
+    .preview-grid {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 30px;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+
+    .image-box {
+      text-align: center;
+    }
+
+    .image-box img {
+      max-width: 250px;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      margin-top: 10px;
+    }
+
+    .spinner {
+      border: 5px solid #eee;
+      border-top: 5px solid #007bff;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+      display: none;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="upload-container">
+    <h2>Image Processor</h2>
+    <input type="file" id="fileInput" accept="image/*" />
+    <br />
+    <button id="uploadBtn">Upload & Process</button>
+    <div id="spinner" class="spinner"></div>
+    <div id="message" class="status"></div>
+
+    <div class="preview-grid" id="preview-box" style="display:none;">
+      <div class="image-box">
+        <div><strong>Original</strong></div>
+        <img id="original-img" src="" />
+      </div>
+      <div class="image-box">
+        <div><strong>Processed</strong></div>
+        <img id="processed-img" src="" />
+      </div>
+    </div>
+  </div>
+
+ <script>
+  // AWS credentials setup — NEVER expose these in production!
+  AWS.config.update({
+    region: 'ap-south-1',
+    credentials: new AWS.Credentials({
+      accessKeyId: 'AKIAS5PZSDTQTVVCQTM2', // 🔒 Replace with IAM user only for test/dev
+      secretAccessKey: '+bc2Xo7y1GZ71EFNhPC5b8MFAsV8/7AKDpaxBWOm'
+    })
+  });
+
+  const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
+  const uploadBucket = 'my-image-upload-bucket04';
+  const processedBucket = 'my-image-processed-bucket04';
+  const region = 'ap-south-1';
+
+  const uploadBtn = document.getElementById('uploadBtn');
+  const message = document.getElementById('message');
+  const spinner = document.getElementById('spinner');
+  const previewBox = document.getElementById('preview-box');
+  const originalImg = document.getElementById('original-img');
+  const processedImg = document.getElementById('processed-img');
+
+  uploadBtn.addEventListener('click', () => {
+    const file = document.getElementById('fileInput').files[0];
+    if (!file) return alert('Please select an image to upload.');
+
+    spinner.style.display = 'block';
+    message.textContent = '';
+    previewBox.style.display = 'none';
+
+    const params = {
+      Bucket: uploadBucket,
+      Key: file.name,
+      Body: file,
+      ContentType: file.type
+    };
+
+    s3.upload(params, (err, data) => {
+      if (err) {
+        spinner.style.display = 'none';
+        console.error('Upload Error:', err);
+        message.style.color = 'red';
+        message.textContent = 'Upload failed. Please check permissions or keys.';
+        return;
+      }
+
+      message.style.color = 'green';
+      message.textContent = 'Upload successful! Waiting for Lambda to process...';
+
+      const timestamp = Date.now();
+      const originalUrl = `https://${uploadBucket}.s3.${region}.amazonaws.com/${file.name}?t=${timestamp}`;
+      const processedUrl = `https://${processedBucket}.s3.${region}.amazonaws.com/watermarked-${file.name}?t=${timestamp}`;
+
+      // Wait 3–5 seconds for Lambda to finish processing
+      setTimeout(() => {
+        originalImg.src = originalUrl;
+        processedImg.src = processedUrl;
+        previewBox.style.display = 'flex';
+        spinner.style.display = 'none';
+      }, 5000); // ⏱ Increase if processing takes longer
+    });
+  });
+</script>
+
+
+</body>
+</html>
